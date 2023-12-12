@@ -40,6 +40,23 @@ Real-world low-resolution (LR) videos have diverse and complex degradations, imp
 ![mgld](assets/sequence-compare-042.png)
 </details>
 
+<details>
+<summary> <strong> Video Comparisons </strong> (click to expand) </summary>
+  
+  <br><strong> Video Comparison 1 </strong><br>
+  
+  https://github.com/IanYeung/MGLD-VSR/assets/19669051/3b0f3691-fd21-4bc7-8970-402fe628086b
+
+  <br><strong> Video Comparison 2 </strong><br>
+
+  https://github.com/IanYeung/MGLD-VSR/assets/19669051/8bcb9c5c-f073-402e-93ee-f32b2444463a
+
+  <br><strong> Video Comparison 3 </strong><br>
+
+  https://github.com/IanYeung/MGLD-VSR/assets/19669051/0abff608-a1ba-4efd-9599-502e753c8b26
+ 
+</details>
+
 ## Miscs
 
 ### License
