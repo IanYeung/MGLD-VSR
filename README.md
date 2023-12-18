@@ -13,6 +13,7 @@ Real-world low-resolution (LR) videos have diverse and complex degradations, imp
 ![mgld](assets/framework-overview.png)
 
 ## Updates
+- **2023.12.18**: Code is released.
 - **2023.12.06**: Repo is released.
 
 ## Results
@@ -57,10 +58,86 @@ Real-world low-resolution (LR) videos have diverse and complex degradations, imp
  
 </details>
 
-## Miscs
+## Installation
+```
+# git clone this repository
+git clone https://github.com/IanYeung/MGLD-VSR
+cd MGLD-VSR
 
-### License
-This project is released under the [Apache 2.0 license](LICENSE).
+# Create a conda environment and activate it
+conda env create --file environment.yaml
+conda activate mgldvsr
+
+# Install xformers
+conda install xformers -c xformers/label/dev
+
+# Install taming & clip
+pip install -e git+https://github.com/CompVis/taming-transformers.git@master#egg=taming-transformers
+pip install -e git+https://github.com/openai/CLIP.git@main#egg=clip
+```
+
+## Training and Testing
+
+### Testing
+Download the pretrained diffusion denoising U-net and video variational autoencoder from [[BaiduNetDisk](https://pan.baidu.com/s/1xQF996RsxnmN-60ZLB6Vig?pwd=gh4i)] or [[OneDrive](https://connectpolyu-my.sharepoint.com/:f:/g/personal/19046191r_connect_polyu_hk/EvI_j1SUiVFBlwEy4i62ckgB1XEHeqfFcJS4Ho6JQrTAWA?e=rDT4M4)]. Download the VideoLQ dataset following the links [here](https://github.com/ckkelvinchan/RealBasicVSR).
+
+Test on arbitrary size with chopping for VAE.
+```
+python scripts/vsr_val_ddpm_text_T_vqganfin_oldcanvas_tile.py \
+  --config configs/mgldvsr/mgldvsr_512_realbasicvsr_deg.yaml \
+  --ckpt CKPT_PATH \
+  --vqgan_ckpt VQGANCKPT_PATH \
+  --seqs-path INPUT_PATH \
+  --outdir OUT_DIR \
+  --ddpm_steps 50 \
+  --dec_w 1.0 \
+  --colorfix_type adain \
+  --select_idx 0 \
+  --n_gpus 1
+```
+
+
+### Training
+Download the pretrained Stable Diffusion models from [[HuggingFace](https://huggingface.co/stabilityai/stable-diffusion-2-1-base)]. Then set the ckpt_path, load_path and data_root in config files. 
+
+Train the conditional denoising U-net for diffusion. 
+```
+python main.py \
+  --train \
+  --base configs/mgldvsr/mgldvsr_512_realbasicvsr_deg.yaml \
+  --gpus GPU_ID \
+  --name NAME \
+  --scale_lr False
+```
+
+Train the temporal-aware sequence decoder. Please set the ckpt_path, load_path and data_root in config files. 
+
+You need to first generate training data using the finetuned diffusion model in the first stage. 
+```
+python scripts/vsr_val_ddpm_text_T_vqganfin_w_latent.py \
+  --config configs/mgldvsr/mgldvsr_512_realbasicvsr_deg.yaml \
+  --ckpt CKPT_PATH \
+  --vqgan_ckpt VQGANCKPT_PATH \
+  --seqs-path INPUT_PATH \
+  --outdir OUT_DIR \
+  --latent-dir LATENT_DIR
+  --ddpm_steps 50 \
+  --dec_w 1.0 \
+  --colorfix_type adain \
+  --select_idx 0 \
+  --n_gpus 1
+```
+Then you can train temporal-aware sequence decoder:
+```
+python main.py \
+  --train \
+  --base configs/video_vae/video_autoencoder_kl_64x64x4_resi.yaml \
+  --gpus GPU_ID, \
+  --name NAME \
+  --scale_lr False
+```
+
+## Miscs
 
 ### Citations
 ```

@@ -1,0 +1,124 @@
+model:
+  base_learning_rate: 5.0e-5
+  target: ldm.models.autoencoder.VideoAutoencoderKLResi
+  params:
+    # for training only
+    ckpt_path: /home/notebook/code/personal/xxxxxxxx/MGLD-VSR/checkpoints/v2-1_512-ema-pruned.ckpt
+    monitor: "val/rec_loss"
+    embed_dim: 4
+    fusion_w: 1.0
+    freeze_dec: True
+    synthesis_data: False
+    version: 1
+    lossconfig:
+      target: ldm.modules.losses.LPIPSWithDiscriminator
+      params:
+        num_frames: 5
+        disc_start: 501
+        pixelloss_weight: 1.0
+        diffloss_weight: 0.5
+        temploss_weight: 0.5
+        freqloss_weight: 0
+        perceptual_weight: 0.5
+        kl_weight: 0
+        disc_weight: 0.025
+        disc_factor: 1.0 
+        # disc_weight: 0
+        # disc_factor: 0
+        flownet_config:
+          # target: basicsr.archs.raft_arch.RAFT_SR
+          # params:
+          #   model: normal
+          #   load_path: /home/notebook/code/personal/xxxxxxxx/MGLD-VSR/checkpoints/flownets/raft-things.pth
+          # target: basicsr.archs.maskflownet_arch.MaskFlownet_S
+          # params:
+          #   load_path: /home/notebook/code/personal/xxxxxxxx/MGLD-VSR/checkpoints/flownets/maskflownet-ft-sintel.pth
+          target: basicsr.archs.spynet_arch.SpyNet
+          params: 
+            load_path: /home/notebook/code/personal/xxxxxxxx/MGLD-VSR/checkpoints/flownets/spynet_sintel_final-3d2a1287.pth
+    ddconfig:
+      double_z: true
+      num_frames: 5
+      z_channels: 4
+      resolution: 512
+      in_channels: 3
+      out_ch: 3
+      ch: 128
+      ch_mult:
+      - 1
+      - 2
+      - 4
+      - 4
+      num_res_blocks: 2
+      attn_resolutions: []
+      dropout: 0.0
+    
+data:
+  target: main.DataModuleFromConfig
+  params:
+    batch_size: 1
+    num_workers: 6
+    wrap: True
+    train:
+      target: basicsr.data.single_video_dataset.REDSAutoencoderDataset
+      params:
+        dataroot_gt: /home/notebook/data/personal/xxxxxxxx/Data/REDS/train_sharp_sub
+        dataroot_lq: /home/notebook/data/personal/xxxxxxxx/Data/REDS/train_degrade_sub
+        dataroot_sp: /home/notebook/data/personal/xxxxxxxx/Data/REDS/train_sample_sub
+        dataroot_lt: /home/notebook/data/personal/xxxxxxxx/Data/REDS/train_latent_sub
+        meta_info_file: basicsr/data/meta_info/meta_info_REDS_GT_sub.txt
+        val_partition: REDS4
+        test_mode: false
+        io_backend:
+          type: disk
+        load_fix_indices_only: true
+
+        num_frame: 5
+        gt_size: 512
+        interval_list: [1]
+        random_reverse: false
+        use_hflip: true
+        use_rot: false
+        flip_sequence: false
+
+        scale: 4
+    validation:
+      target: basicsr.data.single_video_dataset.REDSAutoencoderDataset
+      params:
+        dataroot_gt: /home/notebook/data/personal/xxxxxxxx/Data/REDS/train_sharp_sub
+        dataroot_lq: /home/notebook/data/personal/xxxxxxxx/Data/REDS/train_degrade_sub
+        dataroot_sp: /home/notebook/data/personal/xxxxxxxx/Data/REDS/train_sample_sub
+        dataroot_lt: /home/notebook/data/personal/xxxxxxxx/Data/REDS/train_latent_sub
+        meta_info_file: basicsr/data/meta_info/meta_info_REDS_GT_sub.txt
+        val_partition: REDS4
+        test_mode: true
+        io_backend:
+          type: disk
+        load_fix_indices_only: true
+
+        num_frame: 5
+        gt_size: 512
+        interval_list: [1]
+        random_reverse: false
+        use_hflip: true
+        use_rot: false
+        flip_sequence: false
+
+        scale: 4
+
+lightning:
+  modelcheckpoint:
+    params:
+      every_n_train_steps: 1500
+  callbacks:
+    image_logger:
+      target: main.ImageLogger
+      params:
+        batch_frequency: 1000
+        max_images: 5
+        n_row: 5
+        increase_log_steps: False
+  trainer:
+    benchmark: True
+    max_steps: 800000
+    accumulate_grad_batches: 8

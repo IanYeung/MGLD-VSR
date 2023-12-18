@@ -1,0 +1,612 @@
+sf: 4
+model:
+  base_learning_rate: 5.0e-05
+  target: ldm.models.diffusion.ddpm.LatentDiffusionVSRTextWT
+  params:
+    # parameterization: "v"
+    linear_start: 0.00085
+    linear_end: 0.0120
+    num_timesteps_cond: 1
+    log_every_t: 200
+    timesteps: 1000
+    first_stage_key: image
+    cond_stage_key: caption
+    image_size: 512
+    channels: 4
+    num_frames: 5
+    cond_stage_trainable: False   # Note: different from the one we trained before
+    conditioning_key: crossattn
+    monitor: val/loss_simple_ema
+    scale_factor: 0.18215
+    use_ema: False
+    # for training only
+    ckpt_path: /home/notebook/code/personal/xxxxxxxx/MGLD-VSR/checkpoints/v2-1_512-ema-pruned.ckpt
+    train_temporal_module: True
+    unfrozen_diff: False
+    random_size: False
+    time_replace: 1000
+    use_usm: True
+    #P2 weighting, we do not use in final version
+    p2_gamma: ~
+    p2_k: ~
+    # ignore_keys: []
+
+    unet_config:
+      target: ldm.modules.diffusionmodules.openaimodel.InflatedUNetModelDualcondV2
+      params:
+        num_frames: 5
+        image_size: 32 # unused
+        in_channels: 4
+        out_channels: 4
+        model_channels: 320
+        attention_resolutions: [ 4, 2, 1 ]
+        num_res_blocks: 2
+        channel_mult: [ 1, 2, 4, 4 ]
+        num_head_channels: 64
+        use_spatial_transformer: True
+        use_linear_in_transformer: True
+        transformer_depth: 1
+        context_dim: 1024
+        use_checkpoint: False
+        legacy: False
+        semb_channels: 256
+
+    first_stage_config:
+      target: ldm.models.autoencoder.AutoencoderKL
+      params:
+        # for training only
+        ckpt_path: /home/notebook/code/personal/xxxxxxxx/MGLD-VSR/checkpoints/v2-1_512-ema-pruned.ckpt
+        embed_dim: 4
+        monitor: val/rec_loss
+        ddconfig:
+          double_z: true
+          z_channels: 4
+          resolution: 512
+          in_channels: 3
+          out_ch: 3
+          ch: 128
+          ch_mult:
+          - 1
+          - 2
+          - 4
+          - 4
+          num_res_blocks: 2
+          attn_resolutions: []
+          dropout: 0.0
+        lossconfig:
+          target: torch.nn.Identity
+
+    cond_stage_config:
+      target: ldm.modules.encoders.modules.FrozenOpenCLIPEmbedder
+      params:
+        version: "/home/notebook/code/personal/xxxxxxxx/MGLD-VSR/checkpoints/open_clip_pytorch_model.bin"
+        freeze: True
+        layer: "penultimate"
+        device: "cuda"
+
+    structcond_stage_config:
+      target: ldm.modules.diffusionmodules.openaimodel.InflatedEncoderUNetModelWT
+      params:
+        num_frames: 5
+        image_size: 96
+        in_channels: 4
+        model_channels: 256
+        out_channels: 256
+        num_res_blocks: 2
+        attention_resolutions: [ 4, 2, 1 ]
+        dropout: 0
+        channel_mult: [ 1, 1, 2, 2 ]
+        conv_resample: True
+        dims: 2
+        use_checkpoint: False
+        use_fp16: False
+        num_heads: 4
+        num_head_channels: -1
+        num_heads_upsample: -1
+        use_scale_shift_norm: False
+        resblock_updown: False
+        use_new_attention_order: False
+    
+    flownet_config:
+      target: basicsr.archs.raft_arch.RAFT_SR
+      params:
+        model: normal
+        load_path: /home/notebook/code/personal/xxxxxxxx/MGLD-VSR/checkpoints/flownets/raft-things.pth
+      # target: basicsr.archs.maskflownet_arch.MaskFlownet_S
+      # params:
+      #   load_path: /home/notebook/code/personal/xxxxxxxx/MGLD-VSR/checkpoints/flownets/maskflownet-ft-sintel.pth
+      # target: basicsr.archs.spynet_arch.SpyNet
+      # params: 
+      #   load_path: /home/notebook/code/personal/xxxxxxxx/MGLD-VSR/checkpoints/flownets/spynet_sintel_final-3d2a1287.pth
+
+degradation:
+  # the first degradation process
+  resize_prob: [0.2, 0.7, 0.1]  # up, down, keep
+  resize_range: [0.3, 1.5]
+  gaussian_noise_prob: 0.5
+  noise_range: [1, 15]
+  poisson_scale_range: [0.05, 2.0]
+  gray_noise_prob: 0.4
+  jpeg_range: [60, 95]
+
+  # the second degradation process
+  second_blur_prob: 0.5
+  resize_prob2: [0.3, 0.4, 0.3]  # up, down, keep
+  resize_range2: [0.6, 1.2]
+  gaussian_noise_prob2: 0.5
+  noise_range2: [1, 12]
+  poisson_scale_range2: [0.05, 1.0]
+  gray_noise_prob2: 0.4
+  jpeg_range2: [60, 100]
+
+  gt_size: 512
+  no_degradation_prob: 0.01
+
+data:
+  target: main.DataModuleFromConfig
+  params:
+    batch_size: 1
+    num_workers: 6
+    wrap: false
+    train:
+      target: basicsr.data.realbasicvsr_dataset.RealVSRRecurrentDataset
+      params:
+        dataroot_gt: /home/notebook/data/personal/xxxxxxxx/Data/REDS/train_sharp
+        meta_info_file: basicsr/data/meta_info/meta_info_REDS_GT.txt
+        val_partition: REDS4  # set to 'official' when use the official validation partition
+        test_mode: false
+        io_backend:
+          type: disk
+
+        num_frame: 5
+        gt_size: 512
+        interval_list: [ 1 ]
+        random_reverse: false
+        use_hflip: true
+        use_rot: false
+        flip_sequence: false
+
+        degradation_1:
+          random_blur:
+            params:
+              kernel_size: [ 7, 9, 11, 13, 15, 17, 19, 21 ]
+              kernel_list: [ 'iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso', 'sinc' ]
+              kernel_prob: [ 0.405, 0.225, 0.108, 0.027, 0.108, 0.027, 0.1 ]
+              sigma_x: [ 0.2, 3 ]
+              sigma_y: [ 0.2, 3 ]
+              rotate_angle: [ -3.1416, 3.1416 ]
+              beta_gaussian: [ 0.5, 4 ]
+              beta_plateau: [ 1, 2 ]
+              sigma_x_step: 0.02
+              sigma_y_step: 0.02
+              rotate_angle_step: 0.31416
+              beta_gaussian_step: 0.05
+              beta_plateau_step: 0.1
+              omega_step: 0.0628
+            keys: [ 'lqs' ]
+          random_resize:
+            params:
+              resize_mode_prob: [ 0.2, 0.7, 0.1 ]  # up, down, keep
+              resize_scale: [ 0.15, 1.5 ]
+              resize_opt: [ 'bilinear', 'area', 'bicubic' ]
+              resize_prob: [ 0.3333, 0.3333, 0.3334 ]
+              resize_step: 0.015
+              is_size_even: True
+            keys: [ 'lqs' ]
+          random_noise:
+            params:
+              noise_type: [ 'gaussian', 'poisson' ]
+              noise_prob: [ 0.5, 0.5 ]
+              gaussian_sigma: [ 1, 30 ]
+              gaussian_gray_noise_prob: 0.4
+              poisson_scale: [ 0.05, 3 ]
+              poisson_gray_noise_prob: 0.4
+              gaussian_sigma_step: 0.1
+              poisson_scale_step: 0.005
+            keys: [ 'lqs' ]
+          random_jpeg:
+            params:
+              quality: [ 30, 95 ]
+              quality_step: 3
+            keys: [ 'lqs' ]
+          random_mpeg:
+            params:
+              codec: [ 'libx264', 'h264', 'mpeg4' ]
+              codec_prob: [ 0.3333, 0.3333, 0.3334 ]
+              bitrate: [ !!float 1e4, !!float 1e5 ]
+            keys: [ 'lqs' ]
+
+        degradation_2:
+          random_blur:
+            params:
+              prob: 0.8
+              kernel_size: [ 7, 9, 11, 13, 15, 17, 19, 21 ]
+              kernel_list: [ 'iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso', 'sinc' ]
+              kernel_prob: [ 0.405, 0.225, 0.108, 0.027, 0.108, 0.027, 0.1 ]
+              sigma_x: [ 0.2, 1.5 ]
+              sigma_y: [ 0.2, 1.5 ]
+              rotate_angle: [ -3.1416, 3.1416 ]
+              beta_gaussian: [ 0.5, 4 ]
+              beta_plateau: [ 1, 2 ]
+              sigma_x_step: 0.02
+              sigma_y_step: 0.02
+              rotate_angle_step: 0.31416
+              beta_gaussian_step: 0.05
+              beta_plateau_step: 0.1
+              omega_step: 0.0628
+            keys: [ 'lqs' ]
+          random_resize:
+            params:
+              resize_mode_prob: [ 0.3, 0.4, 0.3 ]  # up, down, keep
+              resize_scale: [ 0.3, 1.2 ]
+              resize_opt: [ 'bilinear', 'area', 'bicubic' ]
+              resize_prob: [ 0.3333, 0.3333, 0.3334 ]
+              resize_step: 0.03
+              is_size_even: True
+            keys: [ 'lqs' ]
+          random_noise:
+            params:
+              noise_type: [ 'gaussian', 'poisson' ]
+              noise_prob: [ 0.5, 0.5 ]
+              gaussian_sigma: [ 1, 25 ]
+              gaussian_gray_noise_prob: 0.4
+              poisson_scale: [ 0.05, 2.5 ]
+              poisson_gray_noise_prob: 0.4
+              gaussian_sigma_step: 0.1
+              poisson_scale_step: 0.005
+            keys: [ 'lqs' ]
+          random_jpeg:
+            params:
+              quality: [ 30, 95 ]
+              quality_step: 3
+            keys: [ 'lqs' ]
+          random_mpeg:
+            params:
+              codec: [ 'libx264', 'h264', 'mpeg4' ]
+              codec_prob: [ 0.3333, 0.3333, 0.3334 ]
+              bitrate: [ !!float 1e4, !!float 1e5 ]
+            keys: [ 'lqs' ]
+          resize_final:
+            params:
+              target_size: [ 128, 128 ]
+              resize_opt: [ 'bilinear', 'area', 'bicubic' ]
+              resize_prob: [ 0.3333, 0.3333, 0.3334 ]
+            keys: [ 'lqs' ]
+          blur_final:
+            params:
+              prob: 0.8
+              kernel_size: [ 7, 9, 11, 13, 15, 17, 19, 21 ]
+              kernel_list: [ 'sinc' ]
+              kernel_prob: [ 1 ]
+              omega: [ 1.0472, 3.1416 ]
+              omega_step: 0.0628
+            keys: [ 'lqs' ]
+
+        transforms:
+          usm:
+            kernel_size: 51
+            sigma: 0
+            weight: 0.5
+            threshold: 10
+            keys: [ 'gts' ]
+          clip:
+            keys: [ 'lqs' ]
+          rescale:
+            keys: [ 'lqs', 'gts' ]
+
+    validation:
+      target: basicsr.data.realbasicvsr_dataset.RealVSRRecurrentDataset
+      params:
+        dataroot_gt: /home/notebook/data/personal/xxxxxxxx/Data/REDS/train_sharp
+        meta_info_file: basicsr/data/meta_info/meta_info_REDS_GT.txt
+        val_partition: REDS4  # set to 'official' when use the official validation partition
+        test_mode: true
+        io_backend:
+          type: disk
+
+        num_frame: 5
+        gt_size: 512
+        interval_list: [ 1 ]
+        random_reverse: false
+        use_hflip: true
+        use_rot: false
+        flip_sequence: false
+
+        degradation_1:
+          random_blur:
+            params:
+              kernel_size: [ 7, 9, 11, 13, 15, 17, 19, 21 ]
+              kernel_list: [ 'iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso', 'sinc' ]
+              kernel_prob: [ 0.405, 0.225, 0.108, 0.027, 0.108, 0.027, 0.1 ]
+              sigma_x: [ 0.2, 3 ]
+              sigma_y: [ 0.2, 3 ]
+              rotate_angle: [ -3.1416, 3.1416 ]
+              beta_gaussian: [ 0.5, 4 ]
+              beta_plateau: [ 1, 2 ]
+              sigma_x_step: 0.02
+              sigma_y_step: 0.02
+              rotate_angle_step: 0.31416
+              beta_gaussian_step: 0.05
+              beta_plateau_step: 0.1
+              omega_step: 0.0628
+            keys: [ 'lqs' ]
+          random_resize:
+            params:
+              resize_mode_prob: [ 0.2, 0.7, 0.1 ]  # up, down, keep
+              resize_scale: [ 0.15, 1.5 ]
+              resize_opt: [ 'bilinear', 'area', 'bicubic' ]
+              resize_prob: [ 0.3333, 0.3333, 0.3334 ]
+              resize_step: 0.015
+              is_size_even: True
+            keys: [ 'lqs' ]
+          random_noise:
+            params:
+              noise_type: [ 'gaussian', 'poisson' ]
+              noise_prob: [ 0.5, 0.5 ]
+              gaussian_sigma: [ 1, 30 ]
+              gaussian_gray_noise_prob: 0.4
+              poisson_scale: [ 0.05, 3 ]
+              poisson_gray_noise_prob: 0.4
+              gaussian_sigma_step: 0.1
+              poisson_scale_step: 0.005
+            keys: [ 'lqs' ]
+          random_jpeg:
+            params:
+              quality: [ 30, 95 ]
+              quality_step: 3
+            keys: [ 'lqs' ]
+          random_mpeg:
+            params:
+              codec: [ 'libx264', 'h264', 'mpeg4' ]
+              codec_prob: [ 0.3333, 0.3333, 0.3334 ]
+              bitrate: [ !!float 1e4, !!float 1e5 ]
+            keys: [ 'lqs' ]
+
+        degradation_2:
+          random_blur:
+            params:
+              prob: 0.8
+              kernel_size: [ 7, 9, 11, 13, 15, 17, 19, 21 ]
+              kernel_list: [ 'iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso', 'sinc' ]
+              kernel_prob: [ 0.405, 0.225, 0.108, 0.027, 0.108, 0.027, 0.1 ]
+              sigma_x: [ 0.2, 1.5 ]
+              sigma_y: [ 0.2, 1.5 ]
+              rotate_angle: [ -3.1416, 3.1416 ]
+              beta_gaussian: [ 0.5, 4 ]
+              beta_plateau: [ 1, 2 ]
+              sigma_x_step: 0.02
+              sigma_y_step: 0.02
+              rotate_angle_step: 0.31416
+              beta_gaussian_step: 0.05
+              beta_plateau_step: 0.1
+              omega_step: 0.0628
+            keys: [ 'lqs' ]
+          random_resize:
+            params:
+              resize_mode_prob: [ 0.3, 0.4, 0.3 ]  # up, down, keep
+              resize_scale: [ 0.3, 1.2 ]
+              resize_opt: [ 'bilinear', 'area', 'bicubic' ]
+              resize_prob: [ 0.3333, 0.3333, 0.3334 ]
+              resize_step: 0.03
+              is_size_even: True
+            keys: [ 'lqs' ]
+          random_noise:
+            params:
+              noise_type: [ 'gaussian', 'poisson' ]
+              noise_prob: [ 0.5, 0.5 ]
+              gaussian_sigma: [ 1, 25 ]
+              gaussian_gray_noise_prob: 0.4
+              poisson_scale: [ 0.05, 2.5 ]
+              poisson_gray_noise_prob: 0.4
+              gaussian_sigma_step: 0.1
+              poisson_scale_step: 0.005
+            keys: [ 'lqs' ]
+          random_jpeg:
+            params:
+              quality: [ 30, 95 ]
+              quality_step: 3
+            keys: [ 'lqs' ]
+          random_mpeg:
+            params:
+              codec: [ 'libx264', 'h264', 'mpeg4' ]
+              codec_prob: [ 0.3333, 0.3333, 0.3334 ]
+              bitrate: [ !!float 1e4, !!float 1e5 ]
+            keys: [ 'lqs' ]
+          resize_final:
+            params:
+              target_size: [ 128, 128 ]
+              resize_opt: [ 'bilinear', 'area', 'bicubic' ]
+              resize_prob: [ 0.3333, 0.3333, 0.3334 ]
+            keys: [ 'lqs' ]
+          blur_final:
+            params:
+              prob: 0.8
+              kernel_size: [ 7, 9, 11, 13, 15, 17, 19, 21 ]
+              kernel_list: [ 'sinc' ]
+              kernel_prob: [ 1 ]
+              omega: [ 1.0472, 3.1416 ]
+              omega_step: 0.0628
+            keys: [ 'lqs' ]
+
+        transforms:
+          usm:
+            kernel_size: 51
+            sigma: 0
+            weight: 0.5
+            threshold: 10
+            keys: [ 'gts' ]
+          clip:
+            keys: [ 'lqs' ]
+          rescale:
+            keys: [ 'lqs', 'gts' ]
+
+test_data:
+  target: main.DataModuleFromConfig
+  params:
+    batch_size: 1
+    num_workers: 6
+    wrap: false
+    test:
+      target: basicsr.data.realbasicvsr_dataset.RealVSRRecurrentDataset
+      params:
+        dataroot_gt: /home/notebook/data/personal/xxxxxxxx/Data/REDS/train_sharp
+        meta_info_file: basicsr/data/meta_info/meta_info_REDS_GT.txt
+        val_partition: REDS4  # set to 'official' when use the official validation partition
+        test_mode: true
+        io_backend:
+          type: disk
+
+        num_frame: 5
+        gt_size: 512
+        interval_list: [ 1 ]
+        random_reverse: false
+        use_hflip: true
+        use_rot: false
+        flip_sequence: false
+
+        degradation_1:
+          random_blur:
+            params:
+              kernel_size: [ 7, 9, 11, 13, 15, 17, 19, 21 ]
+              kernel_list: [ 'iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso', 'sinc' ]
+              kernel_prob: [ 0.405, 0.225, 0.108, 0.027, 0.108, 0.027, 0.1 ]
+              sigma_x: [ 0.2, 3 ]
+              sigma_y: [ 0.2, 3 ]
+              rotate_angle: [ -3.1416, 3.1416 ]
+              beta_gaussian: [ 0.5, 4 ]
+              beta_plateau: [ 1, 2 ]
+              sigma_x_step: 0.02
+              sigma_y_step: 0.02
+              rotate_angle_step: 0.31416
+              beta_gaussian_step: 0.05
+              beta_plateau_step: 0.1
+              omega_step: 0.0628
+            keys: [ 'lqs' ]
+          random_resize:
+            params:
+              resize_mode_prob: [ 0.2, 0.7, 0.1 ]  # up, down, keep
+              resize_scale: [ 0.15, 1.5 ]
+              resize_opt: [ 'bilinear', 'area', 'bicubic' ]
+              resize_prob: [ 0.3333, 0.3333, 0.3334 ]
+              resize_step: 0.015
+              is_size_even: True
+            keys: [ 'lqs' ]
+          random_noise:
+            params:
+              noise_type: [ 'gaussian', 'poisson' ]
+              noise_prob: [ 0.5, 0.5 ]
+              gaussian_sigma: [ 1, 30 ]
+              gaussian_gray_noise_prob: 0.4
+              poisson_scale: [ 0.05, 3 ]
+              poisson_gray_noise_prob: 0.4
+              gaussian_sigma_step: 0.1
+              poisson_scale_step: 0.005
+            keys: [ 'lqs' ]
+          random_jpeg:
+            params:
+              quality: [ 30, 95 ]
+              quality_step: 3
+            keys: [ 'lqs' ]
+          random_mpeg:
+            params:
+              codec: [ 'libx264', 'h264', 'mpeg4' ]
+              codec_prob: [ 0.3333, 0.3333, 0.3334 ]
+              bitrate: [ !!float 1e4, !!float 1e5 ]
+            keys: [ 'lqs' ]
+
+        degradation_2:
+          random_blur:
+            params:
+              prob: 0.8
+              kernel_size: [ 7, 9, 11, 13, 15, 17, 19, 21 ]
+              kernel_list: [ 'iso', 'aniso', 'generalized_iso', 'generalized_aniso', 'plateau_iso', 'plateau_aniso', 'sinc' ]
+              kernel_prob: [ 0.405, 0.225, 0.108, 0.027, 0.108, 0.027, 0.1 ]
+              sigma_x: [ 0.2, 1.5 ]
+              sigma_y: [ 0.2, 1.5 ]
+              rotate_angle: [ -3.1416, 3.1416 ]
+              beta_gaussian: [ 0.5, 4 ]
+              beta_plateau: [ 1, 2 ]
+              sigma_x_step: 0.02
+              sigma_y_step: 0.02
+              rotate_angle_step: 0.31416
+              beta_gaussian_step: 0.05
+              beta_plateau_step: 0.1
+              omega_step: 0.0628
+            keys: [ 'lqs' ]
+          random_resize:
+            params:
+              resize_mode_prob: [ 0.3, 0.4, 0.3 ]  # up, down, keep
+              resize_scale: [ 0.3, 1.2 ]
+              resize_opt: [ 'bilinear', 'area', 'bicubic' ]
+              resize_prob: [ 0.3333, 0.3333, 0.3334 ]
+              resize_step: 0.03
+              is_size_even: True
+            keys: [ 'lqs' ]
+          random_noise:
+            params:
+              noise_type: [ 'gaussian', 'poisson' ]
+              noise_prob: [ 0.5, 0.5 ]
+              gaussian_sigma: [ 1, 25 ]
+              gaussian_gray_noise_prob: 0.4
+              poisson_scale: [ 0.05, 2.5 ]
+              poisson_gray_noise_prob: 0.4
+              gaussian_sigma_step: 0.1
+              poisson_scale_step: 0.005
+            keys: [ 'lqs' ]
+          random_jpeg:
+            params:
+              quality: [ 30, 95 ]
+              quality_step: 3
+            keys: [ 'lqs' ]
+          random_mpeg:
+            params:
+              codec: [ 'libx264', 'h264', 'mpeg4' ]
+              codec_prob: [ 0.3333, 0.3333, 0.3334 ]
+              bitrate: [ !!float 1e4, !!float 1e5 ]
+            keys: [ 'lqs' ]
+          resize_final:
+            params:
+              target_size: [ 128, 128 ]
+              resize_opt: [ 'bilinear', 'area', 'bicubic' ]
+              resize_prob: [ 0.3333, 0.3333, 0.3334 ]
+            keys: [ 'lqs' ]
+          blur_final:
+            params:
+              prob: 0.8
+              kernel_size: [ 7, 9, 11, 13, 15, 17, 19, 21 ]
+              kernel_list: [ 'sinc' ]
+              kernel_prob: [ 1 ]
+              omega: [ 1.0472, 3.1416 ]
+              omega_step: 0.0628
+            keys: [ 'lqs' ]
+
+        transforms:
+          usm:
+            kernel_size: 51
+            sigma: 0
+            weight: 0.5
+            threshold: 10
+            keys: [ 'gts' ]
+          clip:
+            keys: [ 'lqs' ]
+          rescale:
+            keys: [ 'lqs', 'gts' ]
+
+lightning:
+  modelcheckpoint:
+    params:
+      every_n_train_steps: 3000
+
+  callbacks:
+    image_logger:
+      target: main.ImageLogger
+      params:
+        batch_frequency: 750
+        max_images: 6
+        n_row: 6
+        increase_log_steps: False
+
+  trainer:
+    benchmark: True
+    max_steps: 800000
+    accumulate_grad_batches: 4
