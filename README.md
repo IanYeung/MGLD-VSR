@@ -13,7 +13,7 @@ Real-world low-resolution (LR) videos have diverse and complex degradations, imp
 ![mgld](assets/framework-overview.png)
 
 ## Updates
-- **2023.12.18**: Code is released.
+- **2023.12.18**: Code and pretrained models are released.
 - **2023.12.06**: Repo is released.
 
 ## Results
