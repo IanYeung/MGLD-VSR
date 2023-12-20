@@ -31,3 +31,4 @@ dependencies:
     - wandb
     - pillow
     - av
+    - openmim

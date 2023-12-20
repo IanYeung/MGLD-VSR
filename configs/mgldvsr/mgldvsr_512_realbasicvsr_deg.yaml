@@ -79,7 +79,7 @@ model:
     cond_stage_config:
       target: ldm.modules.encoders.modules.FrozenOpenCLIPEmbedder
       params:
-        version: "/home/notebook/code/personal/xxxxxxxx/MGLD-VSR/checkpoints/open_clip_pytorch_model.bin"
+        # version: "/home/notebook/code/personal/xxxxxxxx/MGLD-VSR/checkpoints/open_clip_pytorch_model.bin"
         freeze: True
         layer: "penultimate"
         device: "cuda"
