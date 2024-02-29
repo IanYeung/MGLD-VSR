@@ -368,6 +368,7 @@ def main():
 
                         samples, _ = model.sample(cond=semantic_c,
                                                   struct_cond=init_latent,
+                                                  guidance_scale=-1.0,
                                                   lr_images=None,
                                                   flows=flows,
                                                   masks=masks,

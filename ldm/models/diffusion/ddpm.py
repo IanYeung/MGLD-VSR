@@ -4322,7 +4322,7 @@ class LatentDiffusionVSRTextWT(DDPM):
             return model_mean, posterior_variance, posterior_log_variance
 
     @torch.no_grad()
-    def p_sample(self, x, c, struct_cond, t, 
+    def p_sample(self, x, c, struct_cond, t, guidance_scale=-1.0,
                  lr_images=None, flows=None, masks=None, clip_denoised=False, repeat_noise=False,
                  return_codebook_ids=False, quantize_denoised=False, return_x0=False,
                  temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None, t_replace=None):
@@ -4361,7 +4361,7 @@ class LatentDiffusionVSRTextWT(DDPM):
                 latents = latents.detach()
                 latents.requires_grad = True
                 loss_tempo = self.compute_temporal_condition_v2(lr_images, latents)
-                latents = latents - model_log_variance * torch.autograd.grad(loss_tempo, latents)[0]
+                latents = latents - guidance_scale * model_log_variance * torch.autograd.grad(loss_tempo, latents)[0]
                 latents = latents.detach()
                 # latents.requires_grad = False
         if flows is not None:
@@ -4369,7 +4369,7 @@ class LatentDiffusionVSRTextWT(DDPM):
                 latents = latents.detach()
                 latents.requires_grad = True
                 loss_tempo = self.compute_temporal_condition_v4(flows, latents, masks)
-                latents = latents - model_log_variance * torch.autograd.grad(loss_tempo, latents)[0]
+                latents = latents - guidance_scale * model_log_variance * torch.autograd.grad(loss_tempo, latents)[0]
                 latents = latents.detach()
                 # latents.requires_grad = False
         if return_codebook_ids:
@@ -4380,7 +4380,7 @@ class LatentDiffusionVSRTextWT(DDPM):
             return latents
 
     @torch.no_grad()
-    def p_sample_canvas(self, x, c, struct_cond, t, 
+    def p_sample_canvas(self, x, c, struct_cond, t, guidance_scale=-1.0,
                  lr_images=None, flows=None, masks=None, clip_denoised=False, repeat_noise=False,
                  return_codebook_ids=False, quantize_denoised=False, return_x0=False,
                  temperature=1., noise_dropout=0., score_corrector=None, corrector_kwargs=None, t_replace=None,
@@ -4422,7 +4422,7 @@ class LatentDiffusionVSRTextWT(DDPM):
                 latents = latents.detach()
                 latents.requires_grad = True
                 loss_tempo = self.compute_temporal_condition_v2(lr_images, latents)
-                latents = latents - model_log_variance * torch.autograd.grad(loss_tempo, latents)[0]
+                latents = latents - guidance_scale * model_log_variance * torch.autograd.grad(loss_tempo, latents)[0]
                 latents = latents.detach()
                 # latents.requires_grad = False
         #if flows is not None and t[0].item() % 2 == 1:
@@ -4431,7 +4431,7 @@ class LatentDiffusionVSRTextWT(DDPM):
                 latents = latents.detach()
                 latents.requires_grad = True
                 loss_tempo = self.compute_temporal_condition_v4(flows, latents, masks)
-                latents = latents - model_log_variance * torch.autograd.grad(loss_tempo, latents)[0]
+                latents = latents - guidance_scale * model_log_variance * torch.autograd.grad(loss_tempo, latents)[0]
                 latents = latents.detach()
                 # latents.requires_grad = False
         if return_codebook_ids:
@@ -4498,7 +4498,7 @@ class LatentDiffusionVSRTextWT(DDPM):
         return img, intermediates
 
     @torch.no_grad()
-    def p_sample_loop(self, cond, struct_cond, shape, 
+    def p_sample_loop(self, cond, struct_cond, shape, guidance_scale=-1.0,
                       lr_images=None, flows=None, masks=None, return_intermediates=False,
                       x_T=None, verbose=True, callback=None, timesteps=None, quantize_denoised=False,
                       mask=None, x0=None, img_callback=None, start_T=None,
@@ -4552,7 +4552,7 @@ class LatentDiffusionVSRTextWT(DDPM):
             if interfea_path is not None:
                 batch_list.append(struct_cond_input)
 
-            img = self.p_sample(img, cond, struct_cond_input, ts, 
+            img = self.p_sample(img, cond, struct_cond_input, ts, guidance_scale=guidance_scale,
                                 lr_images=lr_images, flows=flows, masks=masks,
                                 clip_denoised=self.clip_denoised,
                                 quantize_denoised=quantize_denoised, t_replace=t_replace)
@@ -4616,7 +4616,7 @@ class LatentDiffusionVSRTextWT(DDPM):
         return torch.tile(torch.tensor(weights, device=self.betas.device), (nbatches, self.configs.model.params.channels, 1, 1))
 
     @torch.no_grad()
-    def p_sample_loop_canvas(self, cond, struct_cond, shape, 
+    def p_sample_loop_canvas(self, cond, struct_cond, shape, guidance_scale=-1.0,
                       lr_images=None, flows=None, masks=None, return_intermediates=False,
                       x_T=None, verbose=True, callback=None, timesteps=None, quantize_denoised=False,
                       mask=None, x0=None, img_callback=None, start_T=None,
@@ -4670,7 +4670,7 @@ class LatentDiffusionVSRTextWT(DDPM):
                     cur_path = os.path.join(interfea_path, 'fea_'+str(batch_i)+'_32', 'step_'+str(i)+'.png')
                     visualize_fea(cur_path, struct_cond_input['32'][batch_i, 0])
 
-            img = self.p_sample_canvas(img, cond, struct_cond, ts, 
+            img = self.p_sample_canvas(img, cond, struct_cond, ts, guidance_scale=guidance_scale,
                                 lr_images=lr_images, flows=flows, masks=masks,
                                 clip_denoised=self.clip_denoised,
                                 quantize_denoised=quantize_denoised, t_replace=t_replace,
@@ -4693,7 +4693,7 @@ class LatentDiffusionVSRTextWT(DDPM):
         return img
 
     @torch.no_grad()
-    def sample(self, cond, struct_cond, 
+    def sample(self, cond, struct_cond, guidance_scale=-1.0,
                lr_images=None, flows=None, masks=None, batch_size=16, return_intermediates=False, x_T=None,
                verbose=True, timesteps=None, quantize_denoised=False,
                mask=None, x0=None, shape=None, time_replace=None, adain_fea=None, interfea_path=None, start_T=None, **kwargs):
@@ -4709,6 +4709,7 @@ class LatentDiffusionVSRTextWT(DDPM):
         return self.p_sample_loop(cond,
                                   struct_cond,
                                   shape,
+                                  guidance_scale=guidance_scale,
                                   lr_images=lr_images,
                                   flows=flows,
                                   masks=masks,
@@ -4718,7 +4719,7 @@ class LatentDiffusionVSRTextWT(DDPM):
                                   interfea_path=interfea_path, start_T=start_T)
 
     @torch.no_grad()
-    def sample_canvas(self, cond, struct_cond, 
+    def sample_canvas(self, cond, struct_cond, guidance_scale=-1.0,
                lr_images=None, flows=None, masks=None, batch_size=16, return_intermediates=False, x_T=None,
                verbose=True, timesteps=None, quantize_denoised=False,
                mask=None, x0=None, shape=None, time_replace=None, adain_fea=None, interfea_path=None, tile_size=64, tile_overlap=32, batch_size_sample=4, log_every_t=None, **kwargs):
@@ -4734,6 +4735,7 @@ class LatentDiffusionVSRTextWT(DDPM):
         return self.p_sample_loop_canvas(cond,
                                          struct_cond,
                                          shape,
+                                         guidance_scale=guidance_scale,
                                          lr_images=lr_images,
                                          flows=flows,
                                          masks=masks,
