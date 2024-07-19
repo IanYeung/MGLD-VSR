@@ -146,8 +146,8 @@ python main.py \
 @article{yang2023mgldvsr,
   title={Motion-Guided Latent Diffusion for Temporally Consistent Real-world Video Super-resolution},
   author={Yang, Xi and He, Chenhang and Ma, Jianqi and Zhang, Lei},
-  journal={arXiv preprint arXiv:2312.00853},
-  year={2023}
+  booktitle={Proceedings of the European Conference on Computer Vision (ECCV)},
+  year={2024}
 }
 ```
 
