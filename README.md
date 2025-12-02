@@ -82,7 +82,7 @@ pip install -e git+https://github.com/openai/CLIP.git@main#egg=clip
 ## Training and Testing
 
 ### Testing
-Download the pretrained diffusion denoising U-net and video variational autoencoder from [[BaiduNetDisk](https://pan.baidu.com/s/1xQF996RsxnmN-60ZLB6Vig?pwd=gh4i)] or [[OneDrive](https://connectpolyu-my.sharepoint.com/:f:/g/personal/19046191r_connect_polyu_hk/EvI_j1SUiVFBlwEy4i62ckgB1XEHeqfFcJS4Ho6JQrTAWA?e=rDT4M4)]. Download the VideoLQ dataset following the links [here](https://github.com/ckkelvinchan/RealBasicVSR). Please update the ckpt_path, load_path and dataroot_gt paths in config files. 
+Download the pretrained diffusion denoising U-net and video variational autoencoder from [[BaiduNetDisk](https://pan.baidu.com/s/1xQF996RsxnmN-60ZLB6Vig?pwd=gh4i)] or [[Huggingface]( https://huggingface.co/ianyeung/MGLD-VSR)]. Download the VideoLQ dataset following the links [here](https://github.com/ckkelvinchan/RealBasicVSR). Please update the ckpt_path, load_path and dataroot_gt paths in config files. 
 
 Test on arbitrary size with chopping for VAE.
 ```
